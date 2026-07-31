@@ -12,7 +12,6 @@
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--ocean);color:var(--ink);
     font-family:ui-sans-serif,system-ui,"Helvetica Neue",Arial,sans-serif;overflow:hidden}
-  #shadeimg{position:absolute;pointer-events:none;display:none;image-rendering:auto}
   svg{position:absolute;inset:0;width:100%;height:100%;cursor:grab;touch-action:none;
     background:transparent;-webkit-user-select:none;user-select:none}
   svg text{-webkit-user-select:none;user-select:none}
@@ -151,7 +150,6 @@
 </style>
 </head>
 <body>
-<img id="shadeimg" alt="">
 <svg id="map" role="img" aria-label="Proposed Salmonberry Trail alignment across northwest Oregon"></svg>
 <div class="panel" id="panel">
   <div class="hdr">
@@ -231,8 +229,12 @@ function path(g){const t=g.type,c=g.coordinates;
 const svg=document.getElementById("map"),root=el("g");svg.appendChild(root);
 const gCrd=el("g"),gLand=el("g"),gRam=el("g"),gReg=el("g"),gShade=el("g"),gRef=el("g"),gPri=el("g"),gHy=el("g"),gRd=el("g"),gStatus=el("g"),gOther=el("g"),gT=el("g"),gMp=el("g"),gTh=el("g"),gP14=el("g"),gAcc=el("g"),gTown=el("g"),gLab=el("g");
 [gRef,gPri,gLand,gShade,gHy,gCrd,gRd,gReg,gRam,gStatus,gOther,gT,gMp,gTh,gP14,gAcc,gTown,gLab].forEach(g=>root.appendChild(g));
-const shadeImg=document.getElementById("shadeimg");
-if(D.shade&&shadeImg) shadeImg.src=D.shade.png;
+let shadeImg=null;
+if(D.shade){
+  shadeImg=el("image",{href:D.shade.png,x:D.shade.x,y:D.shade.y,
+    width:D.shade.w,height:D.shade.h,preserveAspectRatio:"none","pointer-events":"none"});
+  gShade.appendChild(shadeImg);
+}
 
 // Pins hold their contents in SCREEN pixels; apply() rescales them so markers and
 // text stay a constant on-screen size no matter the zoom.
@@ -480,13 +482,7 @@ function apply(){
     if(s.attr==="font-size") s.node.style.fontSize=v+"px";
     else s.node.setAttribute(s.attr, s.attr==="x"||s.attr==="y" ? v : Math.abs(v));
   }
-  if(shadeImg&&D.shade){
-    const px=u=>(u-vx)/w*r.width, py=u=>(u-vy)/h*r.height;
-    shadeImg.style.left=px(D.shade.x)+"px"; shadeImg.style.top=py(D.shade.y)+"px";
-    shadeImg.style.width=(D.shade.w/w*r.width)+"px";
-    shadeImg.style.height=(D.shade.h/h*r.height)+"px";
-    shadeImg.style.display=shadeOn?"block":"none";
-  }
+  if(shadeImg) shadeImg.style.display=shadeOn?"":"none";
   // Declutter: place every label, hide only the ones that would overlap a
   // higher-priority label already placed. Recomputed on every pan and zoom,
   // so more names appear as you zoom in rather than all-or-nothing.
