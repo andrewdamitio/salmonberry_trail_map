@@ -534,6 +534,35 @@ function apply(){
   }
   if(sizeErrCount) window.__dbg('scaleReg total failures: '+sizeErrCount+' / '+scaleReg.length);
   if(shadeImg) shadeImg.style.display=shadeOn?"":"none";
+  if(!window.__paintReported && scaleReg.length){
+    window.__paintReported=true;
+    const sample=scaleReg.find(s=>s.attr==="r")||scaleReg[0];
+    const node=sample.node;
+    const rect=node.getBoundingClientRect();
+    const cs=getComputedStyle(node);
+    let anc=node.parentElement, ancInfo=[];
+    for(let i=0;i<5&&anc;i++){
+      const acs=getComputedStyle(anc);
+      ancInfo.push(anc.tagName+'#'+(anc.id||'')+'.'+(anc.getAttribute('class')||'')+
+        ' display='+acs.display+' visibility='+acs.visibility+' opacity='+acs.opacity);
+      anc=anc.parentElement;
+    }
+    window.__dbg('SAMPLE ICON node='+node.tagName+' attr='+sample.attr+
+      ' setValue='+node.getAttribute(sample.attr)+
+      ' bbox=('+rect.x.toFixed(1)+','+rect.y.toFixed(1)+','+rect.width.toFixed(1)+','+rect.height.toFixed(1)+')'+
+      ' selfDisplay='+cs.display+' selfVisibility='+cs.visibility+' selfOpacity='+cs.opacity+' selfFill='+cs.fill+
+      '\nANCESTORS: '+ancInfo.join(' | '));
+    if(shadeImg){
+      const irect=shadeImg.getBoundingClientRect();
+      window.__dbg('TERRAIN IMG bbox=('+irect.x.toFixed(1)+','+irect.y.toFixed(1)+','+
+        irect.width.toFixed(1)+','+irect.height.toFixed(1)+') display='+getComputedStyle(shadeImg).display+
+        ' opacity='+getComputedStyle(shadeImg).opacity);
+      const probe=new Image();
+      probe.onload=()=>window.__dbg('TERRAIN IMG decode probe: OK, naturalSize='+probe.naturalWidth+'x'+probe.naturalHeight);
+      probe.onerror=()=>window.__dbg('TERRAIN IMG decode probe: FAILED to decode as a plain <img>');
+      probe.src=D.shade.png;
+    }
+  }
   // Declutter: place every label, hide only the ones that would overlap a
   // higher-priority label already placed. Recomputed on every pan and zoom,
   // so more names appear as you zoom in rather than all-or-nothing.
