@@ -520,6 +520,20 @@ function apply(){
     window.__scaleRegReported=true;
     window.__dbg('apply() ran: scaleReg.length='+scaleReg.length+' r.width='+r.width+
       ' r.height='+r.height+' k='+k+' UA='+navigator.userAgent);
+    window.__dbg('vb(bbox)={x:'+vb.x+',y:'+vb.y+',w:'+vb.w+',h:'+vb.h+'} ar='+ar+
+      ' computed w='+w+' h='+h+' vx='+vx+' vy='+vy+
+      ' viewBoxAttr="'+svg.getAttribute('viewBox')+'"'+
+      ' innerWidth='+window.innerWidth+' innerHeight='+window.innerHeight+
+      ' devicePixelRatio='+window.devicePixelRatio+
+      ' visualViewport='+(window.visualViewport?(window.visualViewport.width+'x'+window.visualViewport.height+' scale='+window.visualViewport.scale):'n/a'));
+    if(pins.length){
+      const p0=pins[0];
+      const expectedX=(p0.__x-vx)/w*r.width, expectedY=(p0.__y-vy)/h*r.height;
+      const actualRect=p0.getBoundingClientRect();
+      window.__dbg('FIRST PIN mapXY=('+p0.__x+','+p0.__y+') expectedScreenXY=('+expectedX.toFixed(1)+','+expectedY.toFixed(1)+
+        ') actualBBox=('+actualRect.x.toFixed(1)+','+actualRect.y.toFixed(1)+','+actualRect.width.toFixed(1)+','+actualRect.height.toFixed(1)+')'+
+        ' transformAttr="'+p0.getAttribute('transform')+'"');
+    }
   }
   let sizeErrCount=0;
   for(const s of scaleReg){
