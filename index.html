@@ -230,9 +230,9 @@ const CLAB={"Tillamook County":["TILLAMOOK",-123.72,45.20],"Washington County":[
   "Clatsop County":["CLATSOP",-123.75,46.10],"Columbia County":["COLUMBIA",-123.05,46.02]};
 
 const MK=(()=>{ let m=1;
-  try{ if(matchMedia("(pointer: coarse)").matches) m=2.6; }catch(_){}
-  if(innerWidth<700) m=Math.max(m,2.4);
-  if(innerWidth<430) m=Math.max(m,2.9);
+  try{ if(matchMedia("(pointer: coarse)").matches) m=1.5; }catch(_){}
+  if(innerWidth<700) m=Math.max(m,1.6);
+  if(innerWidth<430) m=Math.max(m,1.8);
   return m; })();
 const R=6378137,NS="http://www.w3.org/2000/svg";
 // Web Mercator meters are ~14,000,000 in magnitude here. Some mobile GPU
