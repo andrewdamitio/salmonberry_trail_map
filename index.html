@@ -235,7 +235,15 @@ const MK=(()=>{ let m=1;
   if(innerWidth<430) m=Math.max(m,2.9);
   return m; })();
 const R=6378137,NS="http://www.w3.org/2000/svg";
-const mx=l=>R*l*Math.PI/180,my=l=>R*Math.log(Math.tan(Math.PI/4+l*Math.PI/360));
+// Web Mercator meters are ~14,000,000 in magnitude here. Some mobile GPU
+// compositors position transformed/positioned elements (SVG transform=,
+// <image> x/y) using single-precision floats, which can't represent
+// coordinates that large precisely — paths render fine (different, more
+// precise rasterization path) but icons/labels/images land thousands of
+// pixels off. Recentering near zero keeps every coordinate small enough
+// that this precision loss can't happen, on every renderer.
+const OX=-13813395,OY=-5833064;
+const mx=l=>R*l*Math.PI/180-OX,my=l=>R*Math.log(Math.tan(Math.PI/4+l*Math.PI/360))+OY;
 const el=(n,a={})=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
 const ring=cs=>cs.map((c,i)=>(i?"L":"M")+mx(c[0]).toFixed(1)+" "+(-my(c[1])).toFixed(1)).join("");
 function path(g){const t=g.type,c=g.coordinates;
@@ -249,7 +257,7 @@ const gCrd=el("g"),gLand=el("g"),gRam=el("g"),gReg=el("g"),gShade=el("g"),gRef=e
 [gRef,gPri,gLand,gShade,gHy,gCrd,gRd,gReg,gRam,gStatus,gOther,gT,gMp,gTh,gP14,gAcc,gTown,gLab].forEach(g=>root.appendChild(g));
 let shadeImg=null;
 if(D.shade){
-  shadeImg=el("image",{href:D.shade.png,"xlink:href":D.shade.png,x:D.shade.x,y:D.shade.y,
+  shadeImg=el("image",{href:D.shade.png,"xlink:href":D.shade.png,x:D.shade.x-OX,y:D.shade.y-OY,
     width:D.shade.w,height:D.shade.h,preserveAspectRatio:"none","pointer-events":"none"});
   shadeImg.addEventListener("load",()=>window.__dbg("terrain image: load event fired OK"));
   shadeImg.addEventListener("error",e=>window.__dbg("terrain image: ERROR event fired (failed to decode)"));
