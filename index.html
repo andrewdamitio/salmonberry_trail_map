@@ -231,9 +231,22 @@ const gCrd=el("g"),gLand=el("g"),gRam=el("g"),gReg=el("g"),gShade=el("g"),gRef=e
 [gRef,gPri,gLand,gShade,gHy,gCrd,gRd,gReg,gRam,gStatus,gOther,gT,gMp,gTh,gP14,gAcc,gTown,gLab].forEach(g=>root.appendChild(g));
 let shadeImg=null;
 if(D.shade){
-  shadeImg=el("image",{href:D.shade.png,x:D.shade.x,y:D.shade.y,
+  shadeImg=el("image",{href:D.shade.png,"xlink:href":D.shade.png,x:D.shade.x,y:D.shade.y,
     width:D.shade.w,height:D.shade.h,preserveAspectRatio:"none","pointer-events":"none"});
   gShade.appendChild(shadeImg);
+}
+// Yield the main thread between batches of DOM work so a big feature set
+// (county roads) can't block layout/paint of everything scheduled after it
+// on slower mobile CPUs.
+const ric=window.requestIdleCallback||(fn=>setTimeout(()=>fn({timeRemaining:()=>8}),1));
+function chunked(features,renderFn,batchSize=250){
+  let i=0;
+  function step(){
+    const end=Math.min(i+batchSize,features.length);
+    for(;i<end;i++) renderFn(features[i]);
+    if(i<features.length) ric(step);
+  }
+  ric(step);
 }
 
 // Pins hold their contents in SCREEN pixels; apply() rescales them so markers and
@@ -298,12 +311,12 @@ for(const f of D.hydro.features){
   hoverable(n,`<b>${p.FULLNAME||"Watercourse"}</b><span>${p.klass}</span>`);
   gHy.appendChild(n);
 }
-for(const f of D.croads.features){
+chunked(D.croads.features,f=>{
   const p=f.properties;
   const n=el("path",{d:path(f.geometry),class:"rd county"});
   hoverable(n,`<b>${p.FULLNAME}</b><span>County / local road \u00b7 ${p.county} County</span>`);
   gCrd.appendChild(n);
-}
+});
 const RDCLS={"Interstate":"interstate","US route":"us","State / other highway":"state"};
 for(const f of D.roads.features){
   const p=f.properties;
