@@ -86,6 +86,7 @@
   details>summary{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
     cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;padding:3px 0;user-select:none}
   details>summary::-webkit-details-marker{display:none}
+  details>summary input{accent-color:var(--ink);margin:0}
   details>summary::before{content:"";width:0;height:0;border-left:4px solid var(--muted);
     border-top:3.5px solid transparent;border-bottom:3.5px solid transparent;
     transition:transform .12s ease}
@@ -161,18 +162,18 @@
      Segment colours mark the five planning units the source data divides the corridor
      into &mdash; they are not different kinds of trail.</p>
   <div id="body-wrap">
-    <details open><summary>Corridor, west to east</summary>
+    <details open><summary><input type="checkbox" class="mst" checked>Corridor, west to east</summary>
       <div id="segs"></div>
       <div id="related"></div>
       <p class="key"><span class="k-solid"></span>on the rail bed
          &nbsp;<span class="k-byp"></span>bypass, off the rail bed
          &nbsp;<span class="k-dash"></span>competing alternative</p>
     </details>
-    <details open><summary>Status</summary><div id="status"></div></details>
-    <details open><summary>Existing regional trails</summary><div id="regional"></div></details>
-    <details open><summary>Public land</summary><div id="lands"></div></details>
-    <details open><summary>Base map</summary><div id="base"></div></details>
-    <details open><summary>Points</summary><div id="points"></div></details>
+    <details open><summary><input type="checkbox" class="mst" checked>Status</summary><div id="status"></div></details>
+    <details open><summary><input type="checkbox" class="mst" checked>Existing regional trails</summary><div id="regional"></div></details>
+    <details open><summary><input type="checkbox" class="mst" checked>Public land</summary><div id="lands"></div></details>
+    <details open><summary><input type="checkbox" class="mst" checked>Base map</summary><div id="base"></div></details>
+    <details open><summary><input type="checkbox" class="mst" checked>Points</summary><div id="points"></div></details>
     <div class="rule"></div>
     <div class="tot"><span>Corridor total</span><span class="mi" id="total"></span></div>
     <p class="note">Hover a marker or highway for its name; click for full attributes.
@@ -732,6 +733,25 @@ fold.onclick=()=>{
   fold.setAttribute("aria-expanded",String(!folded));
 };
 if(innerWidth<700) fold.click();          // start folded on a phone (handler now exists)
+
+// --- per-category master toggles ---
+for(const master of document.querySelectorAll("details>summary>input.mst")){
+  master.addEventListener("click",e=>e.stopPropagation());   // don't fold/unfold the section
+  const details=master.closest("details");
+  const boxes=()=>[...details.querySelectorAll("input[type=checkbox]")].filter(cb=>cb!==master);
+  master.addEventListener("change",()=>{
+    master.indeterminate=false;
+    for(const cb of boxes()){
+      if(cb.checked!==master.checked){cb.checked=master.checked;cb.dispatchEvent(new Event("change"));}
+    }
+  });
+  details.addEventListener("change",e=>{
+    if(e.target===master) return;
+    const all=boxes(), on=all.filter(cb=>cb.checked).length;
+    master.checked=on>0;
+    master.indeterminate=on>0&&on<all.length;
+  });
+}
 
 const info=document.getElementById("info"),body=document.getElementById("body");
 document.getElementById("close").onclick=()=>show(null,null);
