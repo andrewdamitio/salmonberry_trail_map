@@ -292,7 +292,7 @@ function onTap(node,fn){
   node.addEventListener("pointerup",e=>{
     if(!armed) return; armed=false;
     if(Math.hypot(e.clientX-sx,e.clientY-sy)<10 && Date.now()-t0<700){
-      e.stopPropagation();justTapped=true;fn(e);
+      justTapped=true;fn(e);
     }
   });
   node.addEventListener("pointercancel",()=>{armed=false;});
