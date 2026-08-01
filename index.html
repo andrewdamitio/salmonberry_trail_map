@@ -198,7 +198,7 @@ const LBL={length_mi:"Length (mi)",corridor:"Class",r_to_t:"Rail-to-trail condit
   status:"Status",status_basis:"Basis for status",cost_text:"2014 plan cost",
   category:"Category",action:"Action",segment_2014:"2014 segment",located_by:"How this point was located",
   DESCRIP:"Description",trail:"Trail",FULLNAME:"Name",county:"County",surface:"Surface",operator:"Operator",
-  own_class:"Ownership",Own_Name:"Owner",d_Own_Name:"Owner",Unit_Nm:"Unit",acres:"Acres",
+  own_class:"Ownership",Own_Name:"Owner",d_Own_Name:"Owner",Unit_Nm:"Unit",acres:"Acres",acres_part:"Acres",
   Mang_Name:"Manager",d_Mang_Name:"Manager",d_Des_Tp:"Designation",d_Pub_Access:"Public access",Comments:"Field note",FULLNAME:"Name",klass:"Class",n_features:"Source features merged",
   kind:"Type",structure_no:"Structure no.",disposition:"Disposition",note:"Source note",
   cost2014:"2014 plan cost",cost2014_item:"2014 plan line item",alternative:"Alternative",
@@ -277,12 +277,15 @@ function tipMove(ev){
   if(y+h>innerHeight-8) y=ev.clientY-h-pad;
   tip.style.left=x+"px"; tip.style.top=y+"px";
 }
+let justTapped=false;
 function onTap(node,fn){
   let sx=0,sy=0,t0=0,armed=false;
   node.addEventListener("pointerdown",e=>{sx=e.clientX;sy=e.clientY;t0=Date.now();armed=true;});
   node.addEventListener("pointerup",e=>{
     if(!armed) return; armed=false;
-    if(Math.hypot(e.clientX-sx,e.clientY-sy)<10 && Date.now()-t0<700){e.stopPropagation();fn(e);}
+    if(Math.hypot(e.clientX-sx,e.clientY-sy)<10 && Date.now()-t0<700){
+      e.stopPropagation();justTapped=true;fn(e);
+    }
   });
   node.addEventListener("pointercancel",()=>{armed=false;});
 }
@@ -309,12 +312,14 @@ for(const f of D.hydro.features){
   const p=f.properties;
   const n=el("path",{d:path(f.geometry),class:"hy "+(p.klass==="River"?"river":"creek")});
   hoverable(n,`<b>${p.FULLNAME||"Watercourse"}</b><span>${p.klass}</span>`);
+  onTap(n,()=>{show(p,n,p.FULLNAME||"Watercourse");});
   gHy.appendChild(n);
 }
 chunked(D.croads.features,f=>{
   const p=f.properties;
   const n=el("path",{d:path(f.geometry),class:"rd county"});
   hoverable(n,`<b>${p.FULLNAME}</b><span>County / local road \u00b7 ${p.county} County</span>`);
+  onTap(n,()=>{show(p,n,p.FULLNAME||"County / local road");});
   gCrd.appendChild(n);
 });
 const RDCLS={"Interstate":"interstate","US route":"us","State / other highway":"state"};
@@ -445,6 +450,7 @@ for(const f of D.lands.features){
   landAcres[c]+=p.acres_part||0;
   const n=el("path",{d:path(f.geometry),class:"land",fill:LAND[c]||"#BBB","fill-opacity":.34});
   hoverable(n,`<b>${c}</b><span>${Math.round(p.acres_part).toLocaleString()} acres</span>`);
+  onTap(n,()=>{show(p,n,c);});
   landGroups[c].appendChild(n);
 }
 
@@ -574,7 +580,10 @@ function endPtr(e){
 }
 svg.addEventListener("pointerup",endPtr);
 svg.addEventListener("pointercancel",endPtr);
-svg.addEventListener("click",()=>show(null,null));
+svg.addEventListener("click",()=>{
+  if(justTapped){justTapped=false;return;}
+  show(null,null);
+});
 addEventListener("orientationchange",()=>setTimeout(apply,150));
 addEventListener("load",apply);
 addEventListener("resize",apply);
