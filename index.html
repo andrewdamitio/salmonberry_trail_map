@@ -54,7 +54,7 @@
   .ram{stroke:var(--ink);stroke-width:1;cursor:pointer}
   .land{stroke:none;pointer-events:fill;cursor:crosshair}
   .land:hover{fill-opacity:.55}
-  .mpk{fill:none;stroke:var(--ink);stroke-width:1;opacity:.55;pointer-events:none}
+  .mpk{fill:none;stroke:var(--ink);stroke-width:1;opacity:.55;pointer-events:none;vector-effect:non-scaling-stroke}
   .acc{fill:#E8B33C;stroke:var(--ink);stroke-width:1.1;cursor:pointer}
   .rd{fill:none;vector-effect:non-scaling-stroke;cursor:crosshair}
   .rd.county{stroke:#9C9C9C;stroke-width:1}
@@ -99,7 +99,8 @@
   .k-byp{border-top-style:dotted!important;border-top-width:3px}
   .k-dash{border-top-style:dashed!important}
   .grp-lab{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
-    margin:9px 0 1px;cursor:default;pointer-events:none}
+    margin:9px 0 1px;cursor:default;pointer-events:none;display:flex;align-items:center;gap:6px}
+  .grp-lab input{pointer-events:auto;accent-color:var(--ink);margin:0;cursor:pointer}
   .key{cursor:default;pointer-events:none}
   .sub-row .sw{width:16px}
   .row.off{opacity:.4}
@@ -608,6 +609,12 @@ addEventListener("resize",apply);
 document.getElementById("reset").onclick=()=>{vb={...bb};apply();};
 apply();
 
+function grpLabel(text){
+  const d=document.createElement("div");
+  d.className="grp-lab";
+  d.innerHTML=`<input type="checkbox" class="mst" checked>${text}`;
+  return d;
+}
 function swatch(o){
   const c=o.color;
   if(o.shape==="area")  return `class="sw sw-area" style="background:linear-gradient(135deg,${c} 0%,#FFFFFF 55%,${c} 100%);opacity:.75"`;
@@ -674,7 +681,7 @@ for(const t of REG)
   mkrow(rgbox,"#4A4A4A",t,regMi[t].toFixed(1)+" mi",v=>{
     for(const o of gReg.children) if(o.__trail===t) o.style.display=v?"":"none";
   });
-const _rl=document.createElement("div");_rl.className="grp-lab";_rl.textContent="Amenities";
+const _rl=grpLabel("Amenities");
 rgbox.appendChild(_rl);
 for(const k of ["Parking","Toilets","Water"]){
   if(!ramCount[k]) continue;
@@ -707,21 +714,21 @@ mkrow(bbox,"#6E7C80","Terrain shading",null,v=>{shadeOn=v;apply();},{shape:"area
 
 // --- points ---
 const pbox=document.getElementById("points");
-const _al=document.createElement("div");_al.className="grp-lab";_al.textContent="Access";
+const _al=grpLabel("Access");
 pbox.appendChild(_al);
 const TH_LABEL={"Trailhead":"Trailhead","Campground":"Campground",
   "Emergency Access and Rest Area":"Emergency access","Helicopter Access and Rest Area":"Helicopter access"};
 for(const t of TH_ORDER)
   mkrow(pbox,TH_COL[t],TH_LABEL[t],String(thCount[t]),
         v=>thGroups[t].style.display=v?"":"none",{shape:"sq"});
-const _sl=document.createElement("div");_sl.className="grp-lab";_sl.textContent="Structures";
+const _sl=grpLabel("Structures");
 pbox.appendChild(_sl);
 for(const k of ["Tunnel","Bridge","River crossing"])
   mkrow(pbox,ST_STYLE[k],k==="River crossing"?"Rudimentary crossing":k+"s",String(stCount[k]),
         v=>stGroups[k].style.display=v?"":"none",{shape:"sq"});
-const _ml=document.createElement("div");_ml.className="grp-lab";_ml.textContent="Reference";
+const _ml=grpLabel("Reference");
 pbox.appendChild(_ml);
-mkrow(pbox,"#FFFFFF","Rail mileposts",String(D.mileposts.features.length),
+mkrow(pbox,"#16232A","Rail mileposts",String(D.mileposts.features.length),
       v=>gMp.style.display=v?"":"none",{shape:"dot"});
 
 // --- collapse the whole legend ---
@@ -748,6 +755,34 @@ for(const master of document.querySelectorAll("details>summary>input.mst")){
   details.addEventListener("change",e=>{
     if(e.target===master) return;
     const all=boxes(), on=all.filter(cb=>cb.checked).length;
+    master.checked=on>0;
+    master.indeterminate=on>0&&on<all.length;
+  });
+}
+
+// --- sub-group master toggles (e.g. Access / Structures within Points) ---
+for(const label of document.querySelectorAll(".grp-lab")){
+  const master=label.querySelector("input.mst");
+  const boxes=()=>{
+    const out=[];
+    let el=label.nextElementSibling;
+    while(el&&!el.classList.contains("grp-lab")){
+      out.push(...el.querySelectorAll("input[type=checkbox]"));
+      el=el.nextElementSibling;
+    }
+    return out;
+  };
+  master.addEventListener("change",()=>{
+    master.indeterminate=false;
+    for(const cb of boxes()){
+      if(cb.checked!==master.checked){cb.checked=master.checked;cb.dispatchEvent(new Event("change"));}
+    }
+  });
+  label.parentElement.addEventListener("change",e=>{
+    if(e.target===master) return;
+    const all=boxes();
+    if(!all.includes(e.target)) return;
+    const on=all.filter(cb=>cb.checked).length;
     master.checked=on>0;
     master.indeterminate=on>0&&on<all.length;
   });
