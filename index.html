@@ -791,15 +791,44 @@ for(const label of document.querySelectorAll(".grp-lab")){
 
 const info=document.getElementById("info"),body=document.getElementById("body");
 document.getElementById("close").onclick=()=>show(null,null);
+const PLAN={valley:"Valley segment plan",canyon:"Canyon segment plan",coast:"Coast segment plan",
+  river:"River segment plan",tillamook:"Tillamook Extension plan"};
+const SMALL=new Set(["of","the","and","at","on","in"]);
+function tidyName(s){
+  if(!s||s!==s.toUpperCase())return s;          // only fix ALL-CAPS source values
+  return s.toLowerCase().split(" ").map((w,i)=>
+    i&&SMALL.has(w)?w:w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
+}
+function segRow(label,val){
+  return `<div><span class="k">${label}:</span> ${val==null||val===""?"\u2014":val}</div>`;
+}
 function show(p,node,head){
   if(selected)selected.classList.remove("sel");
   selected=node;if(node)node.classList.add("sel");
   if(!p){info.classList.remove("on");return;}
   let h=`<h2>${head||""}</h2>`;
-  for(const k in p){
-    if(k==="trail_seg"||p[k]===null||p[k]===""||k==="recs")continue;
-    if(k==="corridor"&&p[k]==="Salmonberry corridor")continue;
-    h+=`<div><span class="k">${LBL[k]||k}:</span> ${p[k]}</div>`;
+  if(p.trail_seg){
+    // Every corridor segment renders through the same template, in the same
+    // order, with an em dash where the source plan is silent. Raw per-plan
+    // keys (trailtype/type/r_to_t/linetype/featuretype/phasing), descr,
+    // n_features, and the *_src / *_basis provenance strings are collapsed
+    // into these rows or dropped.
+    h+=segRow("Length",p.length_mi!=null?p.length_mi.toFixed(2)+" mi":null);
+    h+=segRow("Trail type / condition",p.condition);
+    h+=segRow("Alignment",p.alignment);
+    h+=segRow("Phasing",p.phase);
+    h+=segRow("Status",p.status);
+    h+=segRow("Owner",tidyName(p.owner));
+    h+=segRow("Source",PLAN[p.trail_seg]);
+    if(p.subsegment)h+=segRow("Sub-segment",p.subsegment);
+    if(p.mp)h+=segRow("Milepost",p.mp);
+    if(p.notes)h+=segRow("Notes",p.notes);
+  }else{
+    for(const k in p){
+      if(k==="trail_seg"||p[k]===null||p[k]===""||k==="recs"||k==="n_features")continue;
+      if(k==="corridor"&&p[k]==="Salmonberry corridor")continue;
+      h+=`<div><span class="k">${LBL[k]||k}:</span> ${p[k]}</div>`;
+    }
   }
   body.innerHTML=h;info.classList.add("on");
 }
