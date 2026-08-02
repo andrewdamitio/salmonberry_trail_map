@@ -798,6 +798,7 @@ function show(p,node,head){
   let h=`<h2>${head||""}</h2>`;
   for(const k in p){
     if(k==="trail_seg"||p[k]===null||p[k]===""||k==="recs")continue;
+    if(k==="corridor"&&p[k]==="Salmonberry corridor")continue;
     h+=`<div><span class="k">${LBL[k]||k}:</span> ${p[k]}</div>`;
   }
   body.innerHTML=h;info.classList.add("on");
