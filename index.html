@@ -58,11 +58,16 @@
   .land:hover{fill-opacity:.55}
   .mpk{fill:none;stroke:var(--ink);stroke-width:1;opacity:.55;pointer-events:none;vector-effect:non-scaling-stroke}
   .acc{fill:#E8B33C;stroke:var(--ink);stroke-width:1.1;cursor:pointer}
-  .rd{fill:none;vector-effect:non-scaling-stroke;cursor:crosshair}
-  .rd.county{stroke:#9C9C9C;stroke-width:1}
-  .rd.state{stroke:#B0A99A;stroke-width:.9}
-  .rd.us{stroke:#9A8F7C;stroke-width:1.5}
-  .rd.interstate{stroke:#7E7361;stroke-width:2.1}
+  .rd{fill:none;vector-effect:non-scaling-stroke;cursor:crosshair;stroke-linecap:round;stroke-linejoin:round}
+  .rd.county{stroke:#B5B5B5;stroke-width:.8}
+  /* highways render cased: dark outline underneath, light fill on top */
+  .rd-case{fill:none;vector-effect:non-scaling-stroke;pointer-events:none;stroke-linecap:round;stroke-linejoin:round}
+  .rd-case.state{stroke:#93876F;stroke-width:2.6}
+  .rd-case.us{stroke:#7E7361;stroke-width:3.6}
+  .rd-case.interstate{stroke:#665C4B;stroke-width:4.6}
+  .rd.state{stroke:#F4EFE2;stroke-width:1.3}
+  .rd.us{stroke:#F6E7B4;stroke-width:2}
+  .rd.interstate{stroke:#EFD9A0;stroke-width:2.8}
   .rd:hover{stroke:#3F3A30;stroke-width:3}
   #tip{position:absolute;pointer-events:none;z-index:20;display:none;max-width:230px;
     background:var(--ink);color:#F2F5F5;font-size:11.5px;line-height:1.45;
@@ -341,12 +346,22 @@ chunked(D.croads.features,f=>{
   gCrd.appendChild(n);
 });
 const RDCLS={"Interstate":"interstate","US route":"us","State / other highway":"state"};
+const RDNAME={interstate:"Interstate",us:"US route",state:"State highway"};
+// TIGER classes several named US-route segments (Oregon Coast Hwy = US 101,
+// Sunset Hwy = US 26, Columbia River Hwy = US 30) as "State / other highway";
+// promote them by name so each route draws as one continuous class.
+const US_NAME=/US Hwy|Sunset Hwy|Oregon Coast Hwy|Columbia River Hwy|Hwy 101|Hwy 30\b/;
+const gRdCase=el("g"),gRdFill=el("g");
+gRd.appendChild(gRdCase);gRd.appendChild(gRdFill);
 for(const f of D.roads.features){
-  const p=f.properties;
-  const n=el("path",{d:path(f.geometry),class:"rd "+(RDCLS[p.roadclass]||"state")});
-  hoverable(n,`<b>${p.FULLNAME||"Unnamed highway"}</b><span>${p.roadclass}</span>`);
+  const p=f.properties,d=path(f.geometry);
+  let cls=RDCLS[p.roadclass]||"state";
+  if(cls==="state"&&US_NAME.test(p.FULLNAME||""))cls="us";
+  gRdCase.appendChild(el("path",{d:d,class:"rd-case "+cls}));
+  const n=el("path",{d:d,class:"rd "+cls});
+  hoverable(n,`<b>${p.FULLNAME||"Unnamed highway"}</b><span>${RDNAME[cls]}</span>`);
   onTap(n,()=>{show(p,n,p.FULLNAME||"Highway");});
-  gRd.appendChild(n);
+  gRdFill.appendChild(n);
 }
 
 const groups={},miles={},others={"Canyon alternative":null,"Connector":null,"Existing Banks-Vernonia":null},omi={};
@@ -712,7 +727,7 @@ for(const c of ["Federal","State","County / local","Special district","NGO","Pri
 
 // --- base map ---
 const bbox=document.getElementById("base");
-mkrow(bbox,"#9A8F7C","Highways",null,v=>gRd.style.display=v?"":"none");
+mkrow(bbox,"#7E7361","Highways",null,v=>gRd.style.display=v?"":"none");
 mkrow(bbox,"#9C9C9C","County & local roads",null,v=>gCrd.style.display=v?"":"none");
 mkrow(bbox,"#7FA6C2","Rivers & creeks",null,v=>gHy.style.display=v?"":"none");
 mkrow(bbox,"#6E7C80","Terrain shading",null,v=>{shadeOn=v;apply();},{shape:"area"});
