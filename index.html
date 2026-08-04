@@ -145,6 +145,8 @@
   .info h2{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
   .info .k{color:var(--muted)}
   .info .x{position:absolute;top:7px;right:11px;cursor:pointer;color:var(--muted);font-size:15px}
+  .info-act{margin-top:10px}
+  .info-act .zoomto{margin-top:0;font-size:11px;padding:4px 10px}
   .hint{position:absolute;bottom:14px;left:14px;font-size:10.5px;color:var(--muted)}
   @media(max-width:640px){
     .panel{width:calc(100% - 28px);max-height:42%}
@@ -214,10 +216,10 @@ const LBL={length_mi:"Length (mi)",corridor:"Class",r_to_t:"Rail-to-trail condit
   phase:"Phasing",phase_src:"Phasing source",
   DESCRIP:"Description",trail:"Trail",FULLNAME:"Name",county:"County",surface:"Surface",operator:"Operator",
   own_class:"Ownership",Own_Name:"Owner",d_Own_Name:"Owner",Unit_Nm:"Unit",acres:"Acres",acres_part:"Acres",
-  Mang_Name:"Manager",d_Mang_Name:"Manager",d_Des_Tp:"Designation",d_Pub_Access:"Public access",Comments:"Field note",FULLNAME:"Name",klass:"Class",n_features:"Source features merged",
+  Mang_Name:"Manager",d_Mang_Name:"Manager",d_Des_Tp:"Designation",d_Pub_Access:"Public access",Comments:"Field note",klass:"Class",n_features:"Source features merged",
   kind:"Type",structure_no:"Structure no.",disposition:"Disposition",note:"Source note",
   cost2014:"2014 plan cost",cost2014_item:"2014 plan line item",alternative:"Alternative",
-  segment:"Segment",source:"Source layer",status:"Status",detail:"Notes",
+  segment:"Segment",source:"Source layer",detail:"Notes",
   extent_basis:"How this line was derived",symbol_disp:"Rail structure disposition"};
 const TH_COL={"Trailhead":"#8B5E3C","Campground":"#9AA84F",
   "Emergency Access and Rest Area":"#C25E00","Helicopter Access and Rest Area":"#1B5E20"};
@@ -301,13 +303,14 @@ function tipMove(ev){
   tip.style.left=x+"px"; tip.style.top=y+"px";
 }
 let justTapped=false;
+let lastTapSvg=null;                 // SVG-root coords of the last feature tap (Fix 3)
 function onTap(node,fn){
   let sx=0,sy=0,t0=0,armed=false;
   node.addEventListener("pointerdown",e=>{sx=e.clientX;sy=e.clientY;t0=Date.now();armed=true;});
   node.addEventListener("pointerup",e=>{
     if(!armed) return; armed=false;
     if(Math.hypot(e.clientX-sx,e.clientY-sy)<10 && Date.now()-t0<700){
-      justTapped=true;fn(e);
+      justTapped=true;lastTapSvg=toSvg(e);fn(e);
     }
   });
   node.addEventListener("pointercancel",()=>{armed=false;});
@@ -347,19 +350,77 @@ chunked(D.croads.features,f=>{
 });
 const RDCLS={"Interstate":"interstate","US route":"us","State / other highway":"state"};
 const RDNAME={interstate:"Interstate",us:"US route",state:"State highway"};
-// TIGER classes several named US-route segments (Oregon Coast Hwy = US 101,
-// Sunset Hwy = US 26, Columbia River Hwy = US 30) as "State / other highway";
-// promote them by name so each route draws as one continuous class.
-const US_NAME=/US Hwy|Sunset Hwy|Oregon Coast Hwy|Columbia River Hwy|Hwy 101|Hwy 30\b/;
+
+// --- Highway classification (Fix 7) ---------------------------------------
+// The source (TIGER, via prep) gives only two usable fields per road:
+//   roadclass  — "Interstate" | "US route" | "State / other highway"
+//   FULLNAME   — the road name as TIGER records it
+// There is NO route-number field, so refining the coarse "State / other
+// highway" bucket has to key off FULLNAME. roadclass is trusted as-is for
+// Interstates and US routes (it tags US 101 correctly); the only refinement
+// is promoting named US-route segments that TIGER filed under the generic
+// "State / other highway" class so each route draws as one continuous weight.
+//
+// The named-route knowledge lives in ONE table below, not in a regex buried
+// in the render loop. To extend to a new county, add the ODOT route name(s)
+// here — nothing else changes. Each entry is a documented claim about what a
+// TIGER name denotes; sources are ODOT highway names + USRouteNumber signage.
+//
+// Scope note: this table is complete for the four-county extent actually
+// loaded (Clatsop/Columbia/Tillamook/Washington). It is deliberately a
+// fixed lookup, not a fuzzy matcher — a name not listed stays whatever
+// roadclass said, which is the safe default (a real state highway keeps
+// state styling; only known-US names are upgraded).
+const US_ROUTE_NAMES=new Map([
+  // name as it appears in FULLNAME (lowercased)   ->  US route it denotes
+  ["oregon coast hwy",   "US 101"],   // US 101 mainline, coast
+  ["us hwy 101",         "US 101"],
+  ["hwy 101",            "US 101"],
+  ["sunset hwy",         "US 26"],    // US 26 Portland–coast
+  ["us hwy 26",          "US 26"],
+  ["columbia river hwy", "US 30"],    // US 30 mainline (not the historic scenic spur)
+  ["us hwy 30",          "US 30"],
+  ["hwy 30",             "US 30"],
+]);
+// Strip TIGER directional prefixes/suffixes ("NW Sunset Hwy E", "Hwy 101 N")
+// so they resolve to their base name. Deliberately does NOT strip
+// alt / business / byp / old / lower / upper: those words denote a DIFFERENT
+// route than the mainline (Alt Hwy 101 and Hwy 101 Business are not US 101),
+// so stripping them would wrongly promote them.
+function baseHighwayName(name){
+  return (name||"")
+    .toLowerCase()
+    .replace(/\b(n|s|e|w|ne|nw|se|sw)\b/g," ")   // directional tokens only
+    .replace(/\s+/g," ").trim();
+}
+// Returns the rendering class for a road: trusts roadclass, then upgrades a
+// state-classed segment to "us" only if its base name is a known US route.
+function classifyHighway(p){
+  const base=RDCLS[p.roadclass]||"state";
+  if(base!=="state") return base;                 // Interstate / US route: trust source
+  const key=baseHighwayName(p.FULLNAME);
+  // exact base-name hit, or a "hwy NNN" form that matches a listed US number
+  if(US_ROUTE_NAMES.has(key)) return "us";
+  return "state";
+}
+// Human-readable route label for the popup/hover, when we know it.
+function routeLabel(p,cls){
+  if(cls==="us"){
+    const key=baseHighwayName(p.FULLNAME);
+    const num=US_ROUTE_NAMES.get(key);
+    return num?`US route (${num})`:"US route";
+  }
+  return RDNAME[cls];
+}
+
 const gRdCase=el("g"),gRdFill=el("g");
 gRd.appendChild(gRdCase);gRd.appendChild(gRdFill);
 for(const f of D.roads.features){
   const p=f.properties,d=path(f.geometry);
-  let cls=RDCLS[p.roadclass]||"state";
-  if(cls==="state"&&US_NAME.test(p.FULLNAME||""))cls="us";
+  const cls=classifyHighway(p);
   gRdCase.appendChild(el("path",{d:d,class:"rd-case "+cls}));
   const n=el("path",{d:d,class:"rd "+cls});
-  hoverable(n,`<b>${p.FULLNAME||"Unnamed highway"}</b><span>${RDNAME[cls]}</span>`);
+  hoverable(n,`<b>${p.FULLNAME||"Unnamed highway"}</b><span>${routeLabel(p,cls)}</span>`);
   onTap(n,()=>{show(p,n,p.FULLNAME||"Highway");});
   gRdFill.appendChild(n);
 }
@@ -434,9 +495,6 @@ sites.forEach(s=>{
   g.appendChild(m);
 });
 
-const gNote=el("g");root.appendChild(gNote);
-{
-}
 
 const gSt=el("g");root.appendChild(gSt);
 const ST_STYLE={"Tunnel":"#5A3E8C","Bridge":"#0F6E8C","River crossing":"#3F8F5A"};
@@ -522,6 +580,54 @@ const bb=(()=>{
   return{x:x0-m,y:y0-m,w:x1-x0+2*m,h:y1-y0+2*m};})();
 let vb={...bb};
 let k0=null;
+
+// --- Fix 2: shareable view state in the URL hash ---
+// Encodes the viewport (rounded map units) and the list of layers the user has
+// switched OFF, so a pasted link reproduces both framing and visible layers.
+// Off-layers are keyed by label text; toggles register a restore fn by label.
+const layerToggles={};                    // label -> {set(on), isOn()}
+let restoring=false;                      // suppress hash writes while applying a restored state
+let hashTimer=null;
+// In a sandboxed about:srcdoc document (how this renders inside the app),
+// history.replaceState with any URL throws a SecurityError, and even assigning
+// location.hash can be blocked. Probe once; if writing isn't allowed, the map
+// still works fully — it just can't emit a shareable link in that context.
+// Reading an inbound hash still works, so links opened at a real origin restore.
+const CAN_WRITE_HASH=(()=>{
+  try{ const prev=location.hash; location.hash=prev; return true; }
+  catch(_){ return false; }
+})();
+function setHash(str){                     // str like "v=...&off=..." or "" to clear
+  if(!CAN_WRITE_HASH) return;
+  try{
+    if(str) location.hash=str;
+    else history.replaceState(null,"",location.pathname+location.search);
+  }catch(_){ /* sandbox refused; ignore, map is unaffected */ }
+}
+function writeHash(){
+  if(restoring||!CAN_WRITE_HASH) return;
+  clearTimeout(hashTimer);
+  hashTimer=setTimeout(()=>{
+    const off=[];
+    for(const k in layerToggles) if(!layerToggles[k].isOn()) off.push(k);
+    const v=[vb.x,vb.y,vb.w,vb.h].map(n=>Math.round(n)).join(",");
+    const parts=["v="+v];
+    if(off.length) parts.push("off="+off.map(encodeURIComponent).join("~"));
+    setHash(parts.join("&"));
+  },250);
+}
+function readHash(){
+  const h=location.hash.replace(/^#/,"");
+  if(!h) return null;
+  const out={off:[]};
+  for(const kv of h.split("&")){
+    const [k,val]=kv.split("=");
+    if(k==="v"){const n=val.split(",").map(Number);
+      if(n.length===4&&n.every(x=>isFinite(x))) out.v={x:n[0],y:n[1],w:n[2],h:n[3]};}
+    else if(k==="off"&&val) out.off=val.split("~").map(decodeURIComponent);
+  }
+  return out;
+}
 function apply(){
   const r=svg.getBoundingClientRect();
   if(r.width<2||r.height<2){requestAnimationFrame(apply);return;}   // layout not settled yet
@@ -564,7 +670,7 @@ function apply(){
     L.node.style.display = hidden ? "none" : "";
     if(!hidden) boxes.push(box);
   }
-
+  writeHash();
 }
 function toSvgXY(pt){const r=svg.getBoundingClientRect(),v=svg.viewBox.baseVal;
   return{x:v.x+(pt.x-r.left)/r.width*v.width, y:v.y+(pt.y-r.top)/r.height*v.height};}
@@ -629,7 +735,12 @@ svg.addEventListener("click",()=>{
 addEventListener("orientationchange",()=>setTimeout(apply,150));
 addEventListener("load",apply);
 addEventListener("resize",apply);
-document.getElementById("reset").onclick=()=>{vb={...bb};apply();};
+document.getElementById("reset").onclick=()=>{
+  vb={...bb};
+  for(const k in layerToggles) layerToggles[k].set(true);   // all layers back on
+  setHash("");                                              // drop the hash (guarded)
+  apply();
+};
 apply();
 
 function grpLabel(text){
@@ -654,8 +765,12 @@ function mkrow(box,color,label,val,fn,opt={}){
   row.innerHTML=`<input type="checkbox" checked><span ${swatch({color:color,...opt})}></span>`+
     `<span>${label}</span>`+(val===null?"":`<span class="mi">${val}</span>`);
   const cb=row.querySelector("input");
-  cb.onchange=e=>fn(e.target.checked);
+  cb.onchange=e=>{fn(e.target.checked);writeHash();};
   box.appendChild(row);
+  // Register for URL-hash state. Labels are unique within the legend; if two
+  // ever collide, the last wins for restore, which is harmless (same label,
+  // same intent). Sub-rows and master toggles all participate.
+  layerToggles[label]={set:on=>{if(cb.checked!==on){cb.checked=on;fn(on);}},isOn:()=>cb.checked};
   return {row:row,cb:cb};
 }
 
@@ -685,12 +800,14 @@ mkrow(rbox,"#5F9E2F","Connector",omi["Connector"].toFixed(2)+" mi",
 
 // --- status: drawn as translucent bands, so the swatch is a band ---
 const stbox2=document.getElementById("status");
-{const regBuilt=D.regional.features.reduce((a,f)=>a+(f.properties.length_mi||0),0);
- mkrow(stbox2,"#8E44FF","Built",((statusMi["Built"]||0)+regBuilt).toFixed(2)+" mi",v=>{
-   document.querySelectorAll(".st-built").forEach(o=>o.style.display=v?"":"none");},{shape:"band"});}
+// "Built" mileage here is the Salmonberry corridor only — other regional trails
+// (Crown Z, Banks–Vernonia) are built too and share the .st-built band style,
+// but they're counted in their own "Existing regional trails" section, not
+// folded into corridor progress. The toggle still shows/hides every built band.
+mkrow(stbox2,"#8E44FF","Built (corridor)",(statusMi["Built"]||0).toFixed(2)+" mi",v=>{
+  document.querySelectorAll(".st-built").forEach(o=>o.style.display=v?"":"none");},{shape:"band"});
 mkrow(stbox2,"#E8B33C","In progress (permitting)",(statusMi["In progress"]||0).toFixed(2)+" mi",v=>{
-  document.querySelectorAll(".st-prog").forEach(o=>o.style.display=v?"":"none");
-  gNote.style.display=v?"":"none";},{shape:"band"});
+  document.querySelectorAll(".st-prog").forEach(o=>o.style.display=v?"":"none");},{shape:"band"});
 mkrow(stbox2,"#B5657E","Proposed",(statusMi["Proposed"]||0).toFixed(2)+" mi",v=>{
   document.querySelectorAll(".st-prop").forEach(o=>o.style.display=v?"":"none");},{shape:"band"});
 
@@ -804,6 +921,21 @@ for(const label of document.querySelectorAll(".grp-lab")){
   });
 }
 
+// --- Fix 2: restore a shared view from the URL hash (legend now exists) ---
+(function restoreFromHash(){
+  const st=readHash(); if(!st) return;
+  restoring=true;
+  if(st.off&&st.off.length){
+    const offSet=new Set(st.off);
+    // Apply leaf toggles first, then master toggles reconcile via their own
+    // change listeners; setting a leaf off while its master is on is fine.
+    for(const k in layerToggles) if(offSet.has(k)) layerToggles[k].set(false);
+  }
+  if(st.v){ vb={...st.v}; }
+  restoring=false;
+  apply();
+})();
+
 const info=document.getElementById("info"),body=document.getElementById("body");
 document.getElementById("close").onclick=()=>show(null,null);
 const PLAN={valley:"Valley segment plan",canyon:"Canyon segment plan",coast:"Coast segment plan",
@@ -817,10 +949,38 @@ function tidyName(s){
 function segRow(label,val){
   return `<div><span class="k">${label}:</span> ${val==null||val===""?"\u2014":val}</div>`;
 }
+// Fix 3: frame the current feature. Line/area features expose a real bbox via
+// getBBox() (root has no transform, so it's already in viewBox units). Point
+// features live inside translated pin groups, so their local bbox is useless —
+// we fall back to the tap location and zoom to a fixed-size window around it.
+function zoomToFeature(node){
+  let target=null;
+  if(node&&node.getBBox){
+    try{
+      const b=node.getBBox();
+      if(b.width>0.5||b.height>0.5){
+        const pad=Math.max(b.width,b.height)*0.25+40;
+        target={x:b.x-pad,y:b.y-pad,w:b.width+2*pad,h:b.height+2*pad};
+      }
+    }catch(_){}
+  }
+  if(!target&&lastTapSvg){
+    const win=Math.min(vb.w,vb.h)*0.35;      // a comfortable close-in window
+    target={x:lastTapSvg.x-win/2,y:lastTapSvg.y-win/2,w:win,h:win};
+  }
+  if(!target) return;
+  // never zoom out past the full extent, and keep the min-size clamp consistent
+  // with the pinch/wheel limit
+  const maxw=bb.w*3;
+  if(target.w>maxw){const s=maxw/target.w;target.w=maxw;target.h*=s;}
+  vb={...target}; apply();
+}
 function show(p,node,head){
   if(selected)selected.classList.remove("sel");
   selected=node;if(node)node.classList.add("sel");
   if(!p){info.classList.remove("on");return;}
+  const zoomNode=node;                       // capture for the button closure
+  const canZoom=(node&&node.getBBox)||lastTapSvg;
   let h=`<h2>${head||""}</h2>`;
   if(p.trail_seg){
     // Every corridor segment renders through the same template, in the same
@@ -845,7 +1005,12 @@ function show(p,node,head){
       h+=`<div><span class="k">${LBL[k]||k}:</span> ${p[k]}</div>`;
     }
   }
+  if(canZoom) h+=`<div class="info-act"><button class="btn zoomto" id="zoomto">Zoom to</button></div>`;
   body.innerHTML=h;info.classList.add("on");
+  if(canZoom){
+    const zb=document.getElementById("zoomto");
+    if(zb) zb.onclick=()=>zoomToFeature(zoomNode);
+  }
 }
 </script>
 </body>
